@@ -1,0 +1,216 @@
+;*******************************************************************************
+;   UNIVERSIDAD DEL VALLE DE GUATEMALA
+;   IE2023 PROGRANACIÓN DE MICROCONTROLADORES 
+;   AUTOR: JORGE SILVA
+;   COMPILADOR: PIC-AS (v2.36), MPLAB X IDE (v6.00)
+;   PROYECTO: PRE LABORATORIO 1, SUMADOR
+;   HARDWARE: PIC16F887
+;   CREADO: 25/07/2022
+;   ÚLTIMA MODIFCACIÓN: 21/07/2022
+;*******************************************************************************
+
+PROCESSOR 16F887
+#include <xc.inc>
+    
+;*******************************************************************************
+;Palabra de configuración generada por MPLAB
+;*******************************************************************************
+; PIC16F887 Configuration Bit Settings
+
+; CONFIG1
+  CONFIG  FOSC = INTRC_NOCLKOUT 
+  CONFIG  WDTE = OFF            
+  CONFIG  PWRTE = ON           
+  CONFIG  MCLRE = OFF           
+  CONFIG  CP = OFF              
+  CONFIG  CPD = OFF             
+  CONFIG  BOREN = OFF           
+  CONFIG  IESO = OFF            
+  CONFIG  FCMEN = OFF           
+  CONFIG  LVP = OFF             
+
+; CONFIG2
+  CONFIG  BOR4V = BOR40V        
+  CONFIG  WRT = OFF    
+  
+;*******************************************************************************
+;VARIABLES
+;*******************************************************************************
+PSECT updata_bank0
+  FLAG: DS 2 ;2 BYTES
+    
+;*******************************************************************************
+;VECTOR RESET
+;*******************************************************************************
+PSECT restVect, class=CODE, delta=2, abs
+ORG 00h
+resetVect:
+    PAGESEL main
+    goto main
+ 
+;*******************************************************************************
+;CÓDIGO PRINCIPAL
+;*******************************************************************************
+ 
+ PSECT CODE, delta=2, abs
+ ORG 100h
+ 
+main:
+    CALL reloj		;Activamos el Oscilador
+    CALL basic		;Ejecutamos una subrutina con la configuración principal
+    banksel PORTA	;Llamamos a los registros usados en el loop
+    banksel PORTB
+    banksel PORTC
+    banksel PORTD
+
+loop:
+    btfsc PORTB, 0	;Si no está presionado el botón, skippear
+    call inc		;Si el botón está apachado, llamamos la subrutina
+    
+    btfsc PORTB, 1
+    call dec1
+    
+    btfsc PORTB, 2
+    call inc2
+    
+    btfsc PORTB, 3
+    call dec2
+    
+    btfsc PORTB, 4
+    call sumar
+    
+    goto loop
+;*******************************************************************************
+;SUB-RUTINAS
+;*******************************************************************************
+    
+reloj:			;Ponemos el oscilador a 1MHz
+    banksel OSCCON
+    bsf	OSCCON, 6
+    bcf OSCCON, 5
+    bcf OSCCON, 4
+    bsf OSCCON, 2
+    bsf OSCCON, 0
+    
+    RETURN
+
+basic:
+    banksel ANSEL	;Si los 2  son cero
+    banksel ANSELH  
+    clrf    ANSEL	;Se vuelven digitales los pines
+    clrf    ANSELH  
+    
+    banksel TRISA	;CONTADOR 1
+    banksel TRISD	;CONTADOR 2
+    banksel TRISC	;SUMADOR
+    clrf    TRISA	;LIMPIAMOS LOS TRIS PARA QUE SEAN SALIDA
+    clrf    TRISD	;SALIDA
+    clrf    TRISC
+    
+    banksel PORTC	;APAGAMOS PUERTOS PARA EVITAR INTERFENCIAS
+    banksel PORTD	;Buena práctica
+    banksel PORTA
+    banksel PORTB
+    clrf    PORTA
+    clrf    PORTB
+    clrf    PORTC
+    clrf    PORTD
+    
+    banksel TRISB	;Encendemos los TRIS para que sean entradas
+    bsf	    TRISB, 0	;RB0 ES ENTRADA (CONT1)
+    bsf	    TRISB, 1	;RB1 ES ENTRADA
+    bsf	    TRISB, 2	;RB2 ES ENTRADA	(CONT2)
+    bsf	    TRISB, 3	;RB3 ES ENTRADA
+    bsf	    TRISB, 4    ;RB4 ES ENTRADA	(HACER SUMA)
+    
+    RETURN
+
+antirebote:	    ;Este es un delay para evitar rebote al presionar
+    movlw   150
+    movwf   FLAG
+    decfsz  FLAG, 1
+    goto $-1
+    
+    RETURN
+
+inc:
+    call antirebote
+    
+    btfsc PORTB, 0	; SE REPITE HASTA QUE SE SUELTE EL BOTÓN
+    goto $-1
+    incf PORTA		; Cuando se apache el boton, se incrementa PORTA
+    
+    btfsc   PORTA, 4	; SI el 4to bit es = 1, se reinicia
+    clrf    PORTA
+    
+    RETURN
+    
+dec1: ; 'dec' no dejaba compilar, ese nombre no era compatible, pero si 'dec1'
+    call antirebote
+    
+    btfsc PORTB, 1
+    goto $-1
+    decf PORTA ; Si PORTA ES 0 SE pone en 1
+    
+    
+    btfsc PORTA, 4  ;No se puede decrementar un cero
+    call MaxValPORTA	;En vez de limpiar, ejecutamos esta subrutina
+    
+    RETURN
+
+inc2:
+    call antirebote
+    
+    btfsc PORTB, 2	; SE REPITE HASTA QUE SE APACHE EL BOTÓN
+    goto $-1
+    incf PORTD		; Cuando se apache el boton, se incrementa en PORTA
+    
+    btfsc   PORTD, 4	; SI el 4to bit es = 1, se reinicia
+    clrf    PORTD
+    
+    RETURN
+dec2:
+    call antirebote
+    
+    btfsc PORTB, 3
+    goto $-1
+    decf PORTD ; Si PORTA en 0, el byte se pone 1111 1111
+    
+    
+    btfsc PORTD, 4 ;
+    call MaxValPORTD
+    
+    RETURN
+    
+MaxValPORTA:
+    clrf    PORTA   ;Se pone en 0 PORTA y se encienden todos los bits
+    bsf	    PORTA, 0
+    bsf	    PORTA, 1
+    bsf	    PORTA, 2
+    bsf	    PORTA, 3
+    
+    RETURN
+
+MaxValPORTD:
+    clrf    PORTD   ; Se pone en 0 PORTA y se encienden todos los bits
+    bsf	    PORTD, 0
+    bsf	    PORTD, 1
+    bsf	    PORTD, 2
+    bsf	    PORTD, 3
+    
+    RETURN
+
+sumar:
+    call antirebote 
+    clrf    PORTC	;Limpiamos PORTC por si acaso
+    
+    btfsc   PORTB, 4
+    goto    $-1
+    
+    movf    PORTA, w	;Movemos a w lo que esté en PORTA
+    addwf   PORTD, w	;Movemos a w lo que esté en PORTD y lo sumamos
+    movwf   PORTC	;El resultado en w lo movemos a PORTC
+    
+    RETURN
+    
+END
